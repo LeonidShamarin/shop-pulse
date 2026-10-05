@@ -5,7 +5,7 @@ An online-shop dashboard that joins store data (OpenCart orders and products) wi
 questions in plain Ukrainian. The AI assistant cannot invent numbers silently: after every
 answer, code checks each number and date against the data the assistant actually fetched.
 
-**Live demo:** https://shop-pulse-demo.vercel.app (UI in Ukrainian)
+**Live demo:** https://shop-pulse-smoky.vercel.app (UI in Ukrainian)
 
 ![Dashboard](docs/dashboard-light.png)
 

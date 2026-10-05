@@ -73,10 +73,20 @@ def og() -> FileResponse:
     return FileResponse(STATIC / "og.png")
 
 
+_dash_cache: dict[int, dict] = {}
+
+
 @app.get("/api/dashboard")
 def dashboard(days: int = 30) -> dict:
     if days not in (7, 30, 90):
         raise HTTPException(400, "days must be 7, 30 or 90")
+    # Дані не змінюються після побудови, тож три можливі відповіді рахуються по разу.
+    if days not in _dash_cache:
+        _dash_cache[days] = _build_dashboard(days)
+    return _dash_cache[days]
+
+
+def _build_dashboard(days: int) -> dict:
     c = conn()
     return {
         "as_of": world.END.isoformat(),
