@@ -7,7 +7,7 @@ answer, code checks each number and date against the data the assistant actually
 
 **Live demo:** https://shop-pulse-smoky.vercel.app (UI in Ukrainian)
 
-![Dashboard](docs/dashboard-light.png)
+![Demo: dashboard, alerts, period switch, and the assistant answering with every number checked](docs/demo.gif)
 
 The shop is fictional and the data is generated (180 days, 8 000+ orders, 84 products). The
 tables keep the shape of the real sources, so connecting a real OpenCart database means
