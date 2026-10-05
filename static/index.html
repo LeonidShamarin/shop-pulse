@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Pulse</title>
+<meta name="description" content="Демо: дашборд інтернет-магазину з даних OpenCart і Google Таблиці, сповіщення про проблеми і ШІ-консультант, що відповідає лише перевіреними числами.">
+<meta property="og:title" content="Shop Pulse: дашборд інтернет-магазину з ШІ-консультантом">
+<meta property="og:description" content="Виручка, маржа, залишки, окупність реклами, сповіщення і питання до даних звичайною мовою.">
+<meta property="og:image" content="https://shop-pulse-demo.vercel.app/og.png">
+<meta property="og:type" content="website">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s1-soft: rgba(42,120,214,0.12);
+  --up: #006300; --down: #b42318;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s1-soft: rgba(57,135,229,0.16);
+    --up: #0ca30c; --down: #ff7a6e; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s1-soft: rgba(57,135,229,0.16);
+  --up: #0ca30c; --down: #ff7a6e; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; }
+h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 4px; }
+.sub { color: var(--ink-2); margin: 2px 0 0; }
+.note { margin: 14px 0 18px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--ink-2); font-size: 13.5px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; color: var(--ink-2); padding: 7px 14px; font: inherit; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.kpi .label { color: var(--ink-2); font-size: 13px; }
+.kpi .value { font-size: clamp(19px, 1.9vw, 24px); white-space: nowrap; font-weight: 650; margin: 2px 0; letter-spacing: -0.01em; }
+.kpi .delta { font-size: 13px; color: var(--ink-2); }
+.delta .up { color: var(--up); } .delta .down { color: var(--down); }
+.two { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); margin-top: 14px; }
+@media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+.cap { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+.alerts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.alert { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 9px 10px; border-radius: 9px;
+  border: 1px solid var(--border); border-left-width: 4px; }
+.alert .t { font-weight: 600; font-size: 14px; }
+.alert .d { color: var(--ink-2); font-size: 13px; }
+.alert .lvl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.sev-critical { border-left-color: var(--critical); } .sev-serious { border-left-color: var(--serious); }
+.sev-warning { border-left-color: var(--warning); }
+.icon { width: 20px; height: 20px; }
+.more { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px 0; font: inherit; font-size: 13px; }
+svg text { fill: var(--muted); font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; }
+.chart { position: relative; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); padding: 6px 9px;
+  border-radius: 7px; font-size: 12.5px; white-space: nowrap; transform: translate(-50%, -110%); opacity: 0; transition: opacity .1s; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--grid); }
+td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.three { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 14px; }
+.ask { margin-top: 14px; }
+.ask form { display: flex; gap: 8px; flex-wrap: wrap; }
+.ask input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--axis);
+  background: var(--page); color: var(--ink); font: inherit; }
+.btn { padding: 10px 16px; border-radius: 9px; border: 0; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.btn:disabled { opacity: .55; cursor: wait; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+.chip { border: 1px solid var(--border); background: var(--page); color: var(--ink-2); border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.answer { margin-top: 14px; white-space: pre-wrap; }
+.meta { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.badge { display: inline-flex; gap: 5px; align-items: center; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+code { font-size: 12px; background: var(--page); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Shop Pulse</h1>
+      <p class="sub">Дашборд інтернет-магазину: продажі, маржа, залишки, реклама і сповіщення про проблеми</p>
+    </div>
+    <div class="seg" role="group" aria-label="Період">
+      <button data-days="7">7 днів</button><button data-days="30" aria-pressed="true">30 днів</button><button data-days="90">90 днів</button>
+    </div>
+  </header>
+
+  <p class="note">Демо на вигаданому магазині товарів для дому: 180 днів, ~8 000 замовлень. Структура даних як у реальних джерелах:
+    товари й замовлення в таблицях OpenCart, витрати на рекламу як у Google Таблиці маркетолога. Дані закінчуються <b id="asof">…</b>.</p>
+
+  <section class="grid kpis" id="kpis" aria-label="Головні показники"></section>
+
+  <div class="grid two">
+    <section class="card">
+      <h2>Виручка по днях</h2>
+      <p class="cap" id="dailycap">Без скасованих і повернених замовлень. Наведіть на графік, щоб побачити день.</p>
+      <div class="chart" id="daily"></div>
+    </section>
+    <section class="card">
+      <h2>Сповіщення</h2>
+      <p class="cap">Знайдено правилами в коді, не моделлю: однакові дані дають однаковий результат.</p>
+      <ul class="alerts" id="alerts"></ul>
+      <button class="more" id="morealerts" hidden></button>
+    </section>
+  </div>
+
+  <div class="grid two">
+    <section class="card">
+      <h2>Окупність реклами по тижнях (ROAS)</h2>
+      <p class="cap">Скільки гривень виручки дає 1 грн витрат. Пунктир: поріг 2, нижче якого реклама не окупає собівартість і доставку.</p>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Google Ads</span><span><i style="background:var(--s2)"></i>Meta (Facebook/Instagram)</span></div>
+      <div class="chart" id="roas"></div>
+    </section>
+    <section class="card">
+      <h2>Канали за період</h2>
+      <div class="scroll"><table id="channels"></table></div>
+    </section>
+  </div>
+
+  <div class="grid three">
+    <section class="card">
+      <h2>Топ товарів за виручкою</h2>
+      <div class="scroll"><table id="top"></table></div>
+    </section>
+    <section class="card">
+      <h2>Залишки: менше ніж на тиждень</h2>
+      <p class="cap">Темп продажів за останні 28 днів.</p>
+      <div class="scroll"><table id="stock"></table></div>
+    </section>
+  </div>
+
+  <section class="card ask">
+    <h2>Запитати про дані</h2>
+    <p class="cap">ШІ-консультант не бачить базу: він викликає ті самі функції, що будують цей дашборд. Після відповіді код звіряє кожне число з даними.</p>
+    <form id="askform">
+      <input id="q" maxlength="400" placeholder="Наприклад: чому впала виручка за останній місяць?" autocomplete="off" aria-label="Питання">
+      <button class="btn" id="askbtn">Запитати</button>
+    </form>
+    <div class="chips" id="chips"></div>
+    <div id="out" aria-live="polite"></div>
+  </section>
+
+  <footer>
+    Код і як це працює: <a href="https://github.com/LeonidShamarin/shop-pulse">github.com/LeonidShamarin/shop-pulse</a> ·
+    Леонід Шамарін, <a href="https://portfolio-shamarin-leonid.vercel.app/">портфоліо</a>
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const uah = v => Math.round(v).toLocaleString('uk-UA').replace(/ /g, ' ') + ' грн';
+const num = v => Number(v).toLocaleString('uk-UA').replace(/ /g, ' ');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const ICONS = {
+  critical: '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="var(--critical)"/><path d="M10 5.5v5.5M10 13.6v.9" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>',
+  serious: '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l8 14H2z" fill="var(--serious)"/><path d="M10 8v4M10 14.3v.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  warning: '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3" fill="var(--warning)"/><path d="M10 6.5v4.5M10 13.4v.4" stroke="#1a1a19" stroke-width="1.8" stroke-linecap="round"/></svg>',
+};
+const LEVEL = { critical: 'критично', serious: 'серйозно', warning: 'увага' };
+
+function kpiTiles(k) {
+  const c = k.current, d = k.change_pct;
+  const delta = (v, goodUp = true) => {
+    if (v === null || v === undefined) return '<span>немає з чим порівняти</span>';
+    const up = v >= 0, good = goodUp ? up : !up;
+    return `<span class="${good ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%</span> до попередніх ${k.period.days} дн.`;
+  };
+  const tiles = [
+    ['Виручка', uah(c.revenue), delta(d.revenue)],
+    ['Замовлення', num(c.orders), delta(d.orders)],
+    ['Середній чек', uah(c.aov), delta(d.aov)],
+    ['Валова маржа', uah(c.gross_margin), `${c.margin_pct}% від виручки · ${delta(d.gross_margin)}`],
+    ['Витрати на рекламу', uah(c.ad_spend), delta(d.ad_spend, false)],
+    ['Повторні покупці', c.repeat_share_pct + '%', `скасування і повернення ${c.cancel_rate_pct}%`],
+  ];
+  $('#kpis').innerHTML = tiles.map(([l, v, s]) =>
+    `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="delta">${s}</div></div>`).join('');
+}
+
+function renderAlerts(list) {
+  const SHOW = 4;
+  const draw = all => {
+    $('#alerts').innerHTML = (all ? list : list.slice(0, SHOW)).map(a =>
+      `<li class="alert sev-${a.severity}">${ICONS[a.severity]}<div><div class="lvl">${LEVEL[a.severity]}</div>
+       <div class="t">${esc(a.title)}</div><div class="d">${esc(a.detail)}</div></div></li>`).join('');
+    const b = $('#morealerts');
+    b.hidden = list.length <= SHOW;
+    b.textContent = all ? 'Згорнути' : `Ще ${list.length - SHOW}`;
+    b.onclick = () => draw(!all);
+  };
+  draw(false);
+}
+
+// Лінійний графік з перехрестям і підказкою. series: [{key, color, label}]
+function lineChart(host, rows, xKey, series, opts = {}) {
+  host.innerHTML = '';
+  const W = host.clientWidth || 600, H = opts.height || 240, m = { t: 12, r: 14, b: 26, l: 58 };
+  const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': opts.label || '' }, host);
+  const vals = rows.flatMap(r => series.map(s => r[s.key]).filter(v => v !== null));
+  let max = Math.max(...vals, opts.threshold || 0) * 1.08;
+  const step = niceStep(max / 4); max = Math.ceil(max / step) * step;
+  const x = i => m.l + (W - m.l - m.r) * (rows.length === 1 ? 0.5 : i / (rows.length - 1));
+  const y = v => H - m.b - (H - m.t - m.b) * (v / max);
+  for (let v = 0; v <= max + 1e-9; v += step) {
+    el('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: v === 0 ? css('--axis') : css('--grid'), 'stroke-width': 1 }, svg);
+    const t = el('text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end' }, svg); t.textContent = opts.fmtAxis ? opts.fmtAxis(v) : num(v);
+  }
+  const every = Math.ceil(rows.length / Math.max(2, Math.floor((W - m.l) / 80)));
+  rows.forEach((r, i) => { const last = i === rows.length - 1; if ((i % every === 0 && (rows.length - 1 - i >= every * 0.6 || last)) || (last && rows.length < 12 && (rows.length - 1) % every >= every * 0.6)) {
+    const t = el('text', { x: x(i), y: H - 8, 'text-anchor': i === rows.length - 1 ? 'end' : i === 0 ? 'start' : 'middle' }, svg); t.textContent = opts.fmtX(r[xKey]); } });
+  if (opts.threshold) {
+    el('line', { x1: m.l, x2: W - m.r, y1: y(opts.threshold), y2: y(opts.threshold), stroke: css('--muted'), 'stroke-dasharray': '4 4', 'stroke-width': 1.2 }, svg);
+  }
+  series.forEach(s => {
+    const pts = rows.map((r, i) => r[s.key] === null ? null : [x(i), y(r[s.key])]).filter(Boolean);
+    if (opts.area) el('path', { d: `M${pts[0][0]},${y(0)} L` + pts.map(p => p.join(',')).join(' L') + ` L${pts.at(-1)[0]},${y(0)} Z`, fill: css('--s1-soft') }, svg);
+    el('path', { d: 'M' + pts.map(p => p.join(',')).join(' L'), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    if (opts.dots) pts.forEach(p => el('circle', { cx: p[0], cy: p[1], r: 4, fill: s.color, stroke: css('--surface'), 'stroke-width': 2 }, svg));
+    if (opts.endLabels) { const p = pts.at(-1); const below = opts.threshold && rows.at(-1)[s.key] < opts.threshold;
+      const t = el('text', { x: p[0] - 8, y: below ? p[1] + 4 : p[1] - 9, 'text-anchor': 'end' }, svg);
+      t.style.fill = css('--ink-2'); t.textContent = opts.endLabels(rows.at(-1)[s.key]); }
+  });
+  (opts.marks || []).forEach(mk => { const i = rows.findIndex(r => r[xKey] === mk.at); if (i < 0) return;
+    el('circle', { cx: x(i), cy: y(rows[i][series[0].key]), r: 5, fill: 'none', stroke: css('--critical'), 'stroke-width': 2 }, svg); });
+  const cross = el('line', { y1: m.t, y2: H - m.b, stroke: css('--axis'), 'stroke-width': 1, opacity: 0 }, svg);
+  const tip = document.createElement('div'); tip.className = 'tip'; host.appendChild(tip);
+  const hit = el('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' }, svg);
+  const move = ev => { const b = svg.getBoundingClientRect(); const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - b.left;
+    const i = Math.max(0, Math.min(rows.length - 1, Math.round((px - m.l) / ((W - m.l - m.r) / Math.max(1, rows.length - 1)))));
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('opacity', 1);
+    tip.innerHTML = opts.tip(rows[i]); tip.style.left = Math.min(Math.max(x(i), 90), W - 90) + 'px'; tip.style.top = m.t + 'px'; tip.style.opacity = 1; };
+  hit.addEventListener('mousemove', move); hit.addEventListener('touchmove', move, { passive: true });
+  hit.addEventListener('mouseleave', () => { tip.style.opacity = 0; cross.setAttribute('opacity', 0); });
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+const shortDate = s => { const [, mo, d] = s.split('-'); return `${+d}.${mo}`; };
+const kUah = v => v >= 1000 ? Math.round(v / 1000) + ' тис' : num(v);
+
+function tables(data) {
+  $('#channels').innerHTML = '<tr><th>Канал</th><th class="n">Замовл.</th><th class="n">Виручка</th><th class="n">Витрати</th><th class="n">ROAS</th></tr>' +
+    data.channels.map(c => `<tr><td>${esc(c.name)}</td><td class="n">${num(c.orders)}</td><td class="n">${uah(c.revenue)}</td>
+      <td class="n">${c.spend ? uah(c.spend) : '–'}</td><td class="n">${c.roas ?? '–'}</td></tr>`).join('');
+  $('#top').innerHTML = '<tr><th>Товар</th><th class="n">Шт</th><th class="n">Виручка</th><th class="n">Склад</th></tr>' +
+    data.top.map(p => `<tr><td>${esc(p.name)}<br><span class="cap">${p.sku} · ${esc(p.category)}</span></td><td class="n">${p.units}</td>
+      <td class="n">${uah(p.revenue)}</td><td class="n">${p.stock === 0 ? '<b style="color:var(--critical)">0</b>' : p.stock}</td></tr>`).join('');
+  $('#stock').innerHTML = '<tr><th>Товар</th><th class="n">Склад</th><th class="n">Шт/день</th><th class="n">Днів</th></tr>' +
+    data.stock.map(s => `<tr><td>${esc(s.name)}<br><span class="cap">${s.sku}${s.stock === 0 ? ' · втрата ~' + uah(s.lost_revenue_per_day) + '/день' : ''}</span></td>
+      <td class="n">${s.stock}</td><td class="n">${s.per_day}</td><td class="n">${s.stock === 0 ? 'закінчився' : s.days_left}</td></tr>`).join('');
+}
+
+let current = null;
+async function load(days) {
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.days === days)));
+  const r = await fetch('/api/dashboard?days=' + days); current = await r.json();
+  $('#asof').textContent = current.as_of.split('-').reverse().join('.');
+  kpiTiles(current.kpis); renderAlerts(current.alerts); tables(current); charts();
+}
+function charts() {
+  if (!current) return;
+  const drops = current.alerts.filter(a => a.kind === 'orders_drop').map(a => a.title.match(/\d{4}-\d\d-\d\d/)[0]);
+  lineChart($('#daily'), current.daily, 'day', [{ key: 'revenue', color: css('--s1') }], {
+    area: true, height: innerWidth > 860 ? 330 : 240, label: 'Виручка по днях', fmtX: shortDate, fmtAxis: kUah, marks: drops.map(at => ({ at })),
+    tip: r => `${shortDate(r.day)}: <b>${uah(r.revenue)}</b>, ${r.orders} замовл.` });
+  const weeks = current.google_weekly.map((g, i) => ({ week: g.week_to, google: g.roas, meta: current.meta_weekly[i].roas }));
+  lineChart($('#roas'), weeks, 'week', [{ key: 'google', color: css('--s1') }, { key: 'meta', color: css('--s2') }], {
+    threshold: 2, dots: true, label: 'ROAS по тижнях', fmtX: s => 'до ' + shortDate(s), fmtAxis: v => Number.isInteger(v) ? v : v.toFixed(1),
+    endLabels: v => v.toFixed(1), height: 220,
+    tip: r => `тиждень до ${shortDate(r.week)}: Google <b>${r.google}</b>, Meta <b>${r.meta}</b>` });
+}
+
+const EXAMPLES = ['Чому впала виручка за останні 30 днів?', 'Які товари треба дозамовити першими?',
+  'Чи окупається реклама в Meta?', 'Що сталося 12 вересня?', 'Який середній чек і маржа за тиждень?'];
+$('#chips').innerHTML = EXAMPLES.map(e => `<button class="chip" type="button">${e}</button>`).join('');
+$('#chips').addEventListener('click', e => { if (e.target.matches('.chip')) { $('#q').value = e.target.textContent; ask(); } });
+$('#askform').addEventListener('submit', e => { e.preventDefault(); ask(); });
+
+async function ask() {
+  const q = $('#q').value.trim(); if (q.length < 3) return;
+  const btn = $('#askbtn'); btn.disabled = true; $('#out').innerHTML = '<p class="cap">Думаю…</p>';
+  try {
+    const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+    const d = await r.json();
+    if (!r.ok) { $('#out').innerHTML = `<p class="answer">${esc(d.error || 'Помилка')}</p>`; return; }
+    const tools = d.steps.filter(s => s.tool).map(s => `<code>${esc(s.tool)}(${esc(s.args && s.args !== '{}' ? s.args.replace(/[{}"]/g, '') : '')})</code>`).join(' ');
+    const check = d.unverified.length
+      ? `<span class="badge">${ICONS.serious} не знайдено в даних: ${d.unverified.map(esc).join(', ')}</span>`
+      : `<span class="badge"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="var(--good)"/><path d="M6.5 10.2l2.4 2.4 4.6-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+         ${d.checked_numbers ? `усі ${d.checked_numbers} чисел є в даних` : 'чисел для перевірки немає'}</span>`;
+    $('#out').innerHTML = `<p class="answer">${esc(d.answer)}</p><div class="meta">${check}<span>Дані: ${tools || 'інструменти не викликались'}</span></div>`;
+  } catch (e) { $('#out').innerHTML = '<p class="answer">Не вдалося з\'єднатися з сервером.</p>'; }
+  finally { btn.disabled = false; }
+}
+
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => load(+b.dataset.days)));
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(charts, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', charts);
+load(30);
+</script>
+</body>
+</html>
