@@ -124,6 +124,33 @@ def run_tool(conn: sqlite3.Connection, name: str, raw_args: str) -> tuple[Any, s
 # --- перевірка чисел ----------------------------------------------------------
 
 _DATE = re.compile(r"\b20\d\d-\d\d-\d\d\b")
+_MONTHS = {"січня": 1, "лютого": 2, "березня": 3, "квітня": 4, "травня": 5, "червня": 6, "липня": 7,
+           "серпня": 8, "вересня": 9, "жовтня": 10, "листопада": 11, "грудня": 12}
+# 12.09.2026, 12.09, 12 09 2026, 12 09, 12 вересня (2026 року): моделі переписують ISO-дати по-людськи
+_HUMAN_DATE = re.compile(r"\b(\d{1,2})(?:\.(\d{1,2})|\s(\d{2})\b|\s(" + "|".join(_MONTHS) + r"))"
+                         r"(?:[.\s](20\d\d))?(?:\s?(?:року|р\.))?")
+
+
+def _iso_dates(text: str, blob: str, year: int = 2026) -> tuple[str, list[str]]:
+    """Знайти людські дати, повернути текст без них і список ISO-дат.
+
+    «4.4» чи «14.10» можуть бути і числом, і датою. Цифрова форма вважається датою
+    лише тоді, коли така дата є в даних; інакше лишається в тексті і перевіряється
+    як число. Форма з назвою місяця («12 вересня») завжди дата.
+    """
+    found: list[str] = []
+
+    def sub(m: re.Match) -> str:
+        day = int(m.group(1))
+        month = int(m.group(2) or m.group(3) or 0) or _MONTHS[m.group(4)]
+        if not (1 <= day <= 31 and 1 <= month <= 12):
+            return m.group(0)
+        iso = f"{int(m.group(5) or year):04d}-{month:02d}-{day:02d}"
+        if not m.group(4) and iso not in blob:
+            return m.group(0)
+        found.append(iso)
+        return " "
+    return _HUMAN_DATE.sub(sub, text), found
 _NUM = re.compile(r"(?<![\w.])-?\d[\d\s  ]*(?:[.,]\d+)?")
 
 
@@ -171,15 +198,21 @@ def check_numbers(answer: str, tool_results: list[Any], question: str = "",
     q_nums = {_parse(m.group()) for m in _NUM.finditer(question)}
 
     dates = _DATE.findall(answer)
+    text, human = _iso_dates(_DATE.sub(" ", answer), blob)
+    dates += human
     bad_dates = [d for d in dates if d not in blob]
-    text = _DATE.sub(" ", answer)
     checked, unverified = 0, []
     for m in _NUM.finditer(text):
         v = _parse(m.group().strip())
         if v is None or (v.is_integer() and (0 <= v <= 10 or 2020 <= v <= 2030)) or v in q_nums:
             continue
         checked += 1
-        ok = any(abs(v - k) <= max(0.51, abs(k) * 0.005) or abs(v - round(k)) < 0.01 for k in known)
+        # Допуск = половина останнього написаного розряду: «4.4» приймає 4.36..4.45,
+        # «14367» приймає 14366.79. Для великих сум ще 0.5% («~14 тис» не пишемо, але
+        # «2 295 000» замість 2 294 900 це округлення, не вигадка).
+        frac = re.search(r"[.,](\d+)", m.group())
+        tol = 0.5 * 10 ** -len(frac.group(1)) if frac else 0.5
+        ok = any(abs(v - k) <= max(tol + 1e-9, abs(k) * 0.005 if abs(k) >= 1000 else 0) for k in known)
         if not ok:
             unverified.append(m.group().strip())
     return {"checked": checked + len(dates), "unverified": unverified + bad_dates}

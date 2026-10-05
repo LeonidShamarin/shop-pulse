@@ -280,3 +280,27 @@ def test_normalized_typography_is_checked(conn):
                                              final(f"Виручка {rev} грн, провал 2026‑09‑12.")]))
     assert ans.unverified == []
     assert "2026-09-12" in ans.text
+
+
+@pytest.mark.parametrize("written", ["12.09.2026", "12.09", "12 09 2026", "12 09", "12 вересня", "12 вересня 2026 року"])
+def test_human_dates_are_checked_against_iso(written):
+    data = [{"day": "2026-09-12", "orders": 8}]
+    assert assistant.check_numbers(f"Провал {written}: 8 замовлень.", data)["unverified"] == []
+
+
+def test_wrong_human_date_is_flagged():
+    data = [{"day": "2026-09-12"}]
+    assert assistant.check_numbers("Провал 13 вересня.", data)["unverified"] == ["2026-09-13"]
+
+
+def test_decimals_are_not_mistaken_for_dates():
+    data = [{"days_left": 4.4, "roas": 1.32}]
+    assert assistant.check_numbers("Вистачить на 4.4 дн, ROAS 1.32.", data)["unverified"] == []
+    assert assistant.check_numbers("Вистачить на 4.7 дн.", data)["unverified"] == ["4.7"]
+
+
+def test_customer_index_keeps_kpis_fast(conn):
+    import time
+    t = time.perf_counter()
+    metrics.kpis(conn, 90)
+    assert time.perf_counter() - t < 0.5

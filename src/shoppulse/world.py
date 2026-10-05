@@ -61,6 +61,7 @@ CREATE TABLE ad_spend (
     PRIMARY KEY (day, channel)
 );
 CREATE INDEX ix_order_date ON oc_order(date_added);
+CREATE INDEX ix_order_customer ON oc_order(customer_id, date_added);
 CREATE INDEX ix_op_order ON oc_order_product(order_id);
 """
 

@@ -36,16 +36,16 @@ Assistant on `openai/gpt-oss-120b` (Groq), 15 questions with known answers
 | Metric | Result |
 |---|---|
 | Called the tool needed to answer | 15 / 15 |
-| Answer contains the expected fact | 14 / 15 |
-| Answers where every number was found in the data | 14 / 15 (49 numbers checked, 1 not found) |
-| Latency, median / p95 | 1.3 s / 6.4 s |
-| Cost per 1 000 questions | $0.42 |
+| Answer contains the expected fact | 15 / 15 |
+| Answers where every number and date was found in the data | 15 / 15 (53 checked, 0 not found) |
+| Latency, median / p95 | 0.74 s / 2.5 s |
+| Cost per 1 000 questions | $0.44 |
 
-The two misses, as they are: one answer wrote the date as `12 09 2026`, which the checker
-does not parse, so it was flagged; another named the product "ніж кухарський" without its
-variant, which the strict fact match did not accept. Both answers were right in substance.
+An earlier run scored 14/15 on facts and on numbers; both misses came from how the answer was
+written, not from wrong data (a date written as `12 09 2026`, a product named without its
+variant). The checker now reads human dates, see below.
 
-Tests: 32, no network, no API key, run under a 1 GB memory cap in Docker
+Tests: 41, no network, no API key, run under a 1 GB memory cap in Docker
 (`scripts/run_tests_capped.ps1`) and in GitHub Actions.
 
 ## Where it breaks / limits
@@ -61,6 +61,15 @@ Tests: 32, no network, no API key, run under a 1 GB memory cap in Docker
 - **Typography broke the checker.** The model writes non-breaking spaces and hyphens
   (`2 294 900`, `2026‑09‑26`); without normalisation real numbers were reported as
   unverified. Fixed and covered by a test.
+- **Dates written for humans looked invented.** The data says `2026-09-12`; the model writes
+  `12.09`, `12 09` or `12 вересня`, and the first live check showed "not found: 12 09" under a
+  correct answer. The checker now converts these to ISO. A digit form like `4.4` counts as a
+  date only if that date exists in the data, otherwise it is checked as a number.
+- **The tolerance was too loose.** A flat ±0.5 accepted "4.7 days" when the data said 4.4.
+  Tolerance is now half of the last digit the model wrote.
+- **One missing index cost 5 seconds.** The repeat-buyer share used a correlated subquery
+  per order; the first 90-day load took 6.4 s on Vercel. An index on
+  `(customer_id, date_added)` brought it to 12 ms locally.
 - **Rate limits are per serverless instance.** 10 questions per hour per IP and 200 per day
   live in memory; a cold start resets them. Good enough for a demo that spends cents, not
   for a paid product (that needs a shared store).
