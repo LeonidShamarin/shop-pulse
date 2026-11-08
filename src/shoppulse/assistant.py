@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import time
@@ -264,6 +265,113 @@ class GroqChat:
                     return {"message": data["choices"][0]["message"], "usage": data.get("usage", {})}
             self.sleep(min(2 ** attempt, 8))
         raise TransientError(str(last))
+
+
+# --- multi-provider fallback -------------------------------------------------
+#
+# Chain: current provider (Groq) -> the four ai-keys.env keys -> ключі2.txt last.
+# Groq/OpenAI/xAI are natively OpenAI-compatible and Gemini has an OpenAI-compatible
+# endpoint; all four support tool calling. A fallback provider ignores the Groq
+# model id and uses its own default below.
+PROVIDER_ENDPOINTS: dict[str, tuple[str, str]] = {
+    "groq": ("https://api.groq.com/openai/v1", MODEL),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"),
+    "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
+    "xai": ("https://api.x.ai/v1", "grok-2-latest"),
+}
+_PRIMARY_ENV = {"groq": "GROQ_API_KEY", "gemini": "GEMINI_API_KEY",
+                "openai": "OPENAI_API_KEY", "xai": "XAI_API_KEY"}
+_AIKEYS_ENV = [("gemini", "GEMINI_API_KEY"), ("groq", "GROQ_API_KEY"),
+               ("openai", "OPENAI_API_KEY"), ("xai", "XAI_API_KEY")]
+_KLYUCHI2_ENV = [("gemini", "GEMINI_API_KEY_2"), ("gemini", "GEMINI_API_KEY_3"),
+                 ("groq", "GROQ_API_KEY_2")]
+
+
+class OpenAICompatChat:
+    """OpenAI-compatible tool-calling chat for any fallback provider. Same `chat`
+    contract as GroqChat, with the provider's base URL and default model,
+    `max_tokens` (portable) and no `reasoning_effort` (Groq-only)."""
+
+    def __init__(self, provider: str, api_key: str, *, model: str | None = None,
+                 http: httpx.Client | None = None, sleep: Callable[[float], None] = time.sleep) -> None:
+        base, model_default = PROVIDER_ENDPOINTS.get(provider, ("", ""))
+        self.provider, self.api_key = provider, api_key
+        self.base_url = base.rstrip("/")
+        self.model = model or model_default
+        self.http = http or httpx.Client(timeout=30.0)
+        self.sleep = sleep
+
+    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+        body = {"model": self.model, "messages": messages, "tools": tools, "tool_choice": "auto",
+                "temperature": 0.0, "max_tokens": 1200}
+        last: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                r = self.http.post(f"{self.base_url}/chat/completions", json=body,
+                                   headers={"Authorization": f"Bearer {self.api_key}"})
+            except httpx.TransportError as e:
+                last = e
+            else:
+                if r.status_code == 429 or r.status_code >= 500:
+                    last = TransientError(f"HTTP {r.status_code}")
+                else:
+                    r.raise_for_status()
+                    data = r.json()
+                    return {"message": data["choices"][0]["message"], "usage": data.get("usage", {})}
+            self.sleep(min(2 ** attempt, 8))
+        raise TransientError(str(last))
+
+
+class FallbackChat:
+    """Try each provider in order; switch on any request failure (transient, or a
+    4xx such as a dead key). Raises `TransientError` only if every provider fails,
+    so `ask()` handles it exactly as it already handles one provider being down."""
+
+    def __init__(self, members: list[tuple[str, ChatClient]]) -> None:
+        if not members:
+            raise TransientError("fallback chain is empty")
+        self.members = members
+
+    def chat(self, messages: list[dict], tools: list[dict]) -> dict:
+        errors: list[str] = []
+        for name, client in self.members:
+            try:
+                return client.chat(messages, tools)
+            except (TransientError, httpx.HTTPError) as e:
+                errors.append(f"{name}: {str(e)[:150]}")
+        raise TransientError("all providers failed -> " + " | ".join(errors))
+
+
+def _make_chat(provider: str, key: str, http: httpx.Client | None = None) -> ChatClient:
+    # Не передаємо http, коли його немає: виклик лишається `GroqChat(key)`, як і
+    # був, тож тести, що підміняють GroqChat лямбдою з одним аргументом, не ламаються.
+    if provider == "groq":
+        return GroqChat(key) if http is None else GroqChat(key, http=http)
+    return OpenAICompatChat(provider, key) if http is None else OpenAICompatChat(provider, key, http=http)
+
+
+def build_chat(primary: str = "groq", *, env: dict | None = None,
+               http: httpx.Client | None = None) -> ChatClient | None:
+    """Build the provider fallback chain from the environment, or `None` when no
+    key is set. Order: current provider, then the ai-keys.env four (gemini, groq,
+    openai, xai), then the ключі2.txt keys last; unset skipped, duplicates
+    collapsed. A single configured provider returns a bare client."""
+    env = os.environ if env is None else env
+    ordered: list[tuple[str, str]] = [(primary, _PRIMARY_ENV[primary])]
+    ordered += _AIKEYS_ENV + _KLYUCHI2_ENV
+    members: list[tuple[str, ChatClient]] = []
+    seen: set[tuple[str, str]] = set()
+    for provider, var in ordered:
+        key = (env.get(var) or "").strip()
+        if not key or (provider, key) in seen:
+            continue
+        seen.add((provider, key))
+        members.append((f"{provider}:{var}", _make_chat(provider, key, http=http)))
+    if not members:
+        return None
+    if len(members) == 1:
+        return members[0][1]
+    return FallbackChat(members)
 
 
 # --- цикл ----------------------------------------------------------------------

@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import json
-import os
 import statistics
 import sys
 import time
@@ -45,13 +44,12 @@ def cases(stockout_name: str) -> list[dict]:
 
 
 def main() -> int:
-    key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not key:
-        print("GROQ_API_KEY is not set")
+    client = assistant.build_chat("groq")
+    if client is None:
+        print("no provider key set (GROQ_API_KEY, GEMINI_API_KEY, ...)")
         return 2
     conn = world.build()
     name = conn.execute("SELECT name FROM oc_product WHERE sku = ?", (world.STOCKOUT_SKU,)).fetchone()[0]
-    client = assistant.GroqChat(key)
     rows = []
     for c in cases(name):
         t0 = time.perf_counter()

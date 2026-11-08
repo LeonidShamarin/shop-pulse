@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 import time
 from collections import deque
@@ -107,12 +106,12 @@ class AskIn(BaseModel):
 
 @app.post("/api/ask")
 def ask(body: AskIn, request: Request) -> JSONResponse:
-    key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not key:
+    client = assistant.build_chat("groq")
+    if client is None:
         return JSONResponse({"error": "Консультант вимкнений: на сервері не задано ключ моделі."}, 503)
     ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0]
     denied = _allow(ip.strip())
     if denied:
         return JSONResponse({"error": denied}, 429)
-    ans = assistant.ask(conn(), body.question, assistant.GroqChat(key))
+    ans = assistant.ask(conn(), body.question, client)
     return JSONResponse(ans.as_dict())
